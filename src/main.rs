@@ -34,10 +34,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut listener = TcpListener::bind(listen_addr).await?;
     let mut limiter = KeyedRateLimiter::<&str>::new(NonZeroU32::new(20).unwrap(), Duration::from_secs(5));
 
-    while let Ok((inbound, _)) = listener.accept().await {
+    while let Ok((mut inbound, _)) = listener.accept().await {
         let remoteIp = Box::leak(inbound.peer_addr().unwrap().ip().to_string().into_boxed_str());
         let limiterResult = limiter.check(remoteIp);
         if limiterResult != Ok(()) {
+            // inbound.write_all(&[0x7b, 0x22, 0x74, 0x65, 0x78, 0x74, 0x22, 0x3a, 0x20, 0x22, 0x66, 0x6f,
+            //     0x6f, 0x22, 0x7d]).await;
             println!("ratelimit exceeded for {}", inbound.peer_addr().unwrap());
             continue;
         }
@@ -79,8 +81,7 @@ async fn transfer(mut inbound: TcpStream, proxy_addr: String) -> Result<(), Box<
                 Ok(size) if size == 0 => break,
                 Ok(size) => {
                     let mut vec = buffer.to_vec();
-                    let totalSize = size;
-                    wo.write_all(&vec[0..totalSize]).await;
+                    wo.write_all(&vec[0..size]).await;
                     let s = String::from_utf8_lossy(&vec);
                     println!("packet {}", s)
                 }
